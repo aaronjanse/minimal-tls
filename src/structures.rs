@@ -34,15 +34,19 @@ pub enum TLSError {
 }
 
 #[derive(PartialEq)]
+#[derive(Debug)]
 pub enum CipherSuite {
     TLS_AES_128_GCM_SHA256 = 0x1301,
     TLS_AES_256_GCM_SHA384 = 0x1302,
     TLS_CHACHA20_POLY1305_SHA256 = 0x1303,
     TLS_AES_128_CCM_SHA256 = 0x1304,
-    TLS_AES_128_CCM_8_SHA256 = 0x1305
+    TLS_AES_128_CCM_8_SHA256 = 0x1305,
+
+    UNKNOWN,
 }
 
 #[derive(PartialEq, Copy, Clone)]
+#[derive(Debug)]
 pub enum ContentType {
     InvalidReserved = 0,
     ChangeCipherSpecReserved = 20,
@@ -51,6 +55,7 @@ pub enum ContentType {
     ApplicationData = 23,
 }
 
+#[derive(Debug)]
 pub struct TLSPlaintext {
     pub ctype : ContentType,
     pub legacy_record_version : ProtocolVersion,
@@ -58,12 +63,14 @@ pub struct TLSPlaintext {
     pub fragment : Vec<u8>,
 }
 
+#[derive(Debug)]
 pub struct TLSInnerPlaintext {
     pub content : Vec<u8>,
     pub ctype : ContentType,
     pub zeros: Vec<u8> // length_of_padding
 }
 
+#[derive(Debug)]
 pub struct TLSCiphertext {
     pub opaque_type : ContentType, // = ContentType::ApplicationData,
     pub legacy_record_version : ProtocolVersion, //= ContentType::TLSv13,
@@ -71,11 +78,13 @@ pub struct TLSCiphertext {
     pub encrypted_record : Vec<u8> // max length is 'length'
 }
 
+#[derive(Debug)]
 pub enum AlertLevel {
     Warning = 1,
     Fatal = 2,
 }
 
+#[derive(Debug)]
 pub enum AlertDescription {
     CloseNotify = 0,
     UnexpectedMessage = 10,
@@ -112,11 +121,13 @@ pub enum AlertDescription {
     CertificateRequired = 116
 }
 
+#[derive(Debug)]
 pub struct Alert {
     pub level : AlertLevel,
     pub description : AlertDescription
 }
 
+#[derive(Debug)]
 pub enum HandshakeType {
     HelloRequestReserved = 0,
     ClientHello = 1,
@@ -137,6 +148,7 @@ pub enum HandshakeType {
     MessageHash = 254,
 }
 
+#[derive(Debug)]
 pub enum HandshakeMessage {
     InvalidMessage,
     ClientHello(ClientHello),
@@ -152,12 +164,14 @@ pub enum HandshakeMessage {
     KeyUpdate(KeyUpdate)
 }
 
+#[derive(Debug)]
 pub struct Handshake {
     pub msg_type : HandshakeType,
     pub length : u32, // IMPORTANT: This is supposed to be a u24, rust has no u24 so we use u32
     pub body : HandshakeMessage
 }
 
+#[derive(Debug)]
 pub struct ClientHello {
     pub legacy_version : u16, // 0x0303,
     pub random: Random,
@@ -167,6 +181,7 @@ pub struct ClientHello {
     pub extensions: Vec<Extension> // <8..2^16-2>
 }
 
+#[derive(Debug)]
 pub struct ServerHello {
     pub version : ProtocolVersion,
     pub random : Random,
@@ -174,12 +189,14 @@ pub struct ServerHello {
     pub extensions : Vec<Extension> // <6..2^16-2>
 }
 
+#[derive(Debug)]
 pub struct HelloRetryRequest {
     pub server_version : ProtocolVersion,
     pub cipher_suite : CipherSuite,
     pub extensions : Vec<Extension> // <2..2^16-1>
 }
 
+#[derive(Debug)]
 pub enum Extension {
     SupportedGroups(NamedGroupList),
     SignatureAlgorithms(SignatureSchemeList),
@@ -194,6 +211,7 @@ pub enum Extension {
 }
 
 // TODO: We must ensure that this value is be 2 bytes long!
+#[derive(Debug)]
 pub enum ExtensionType {
     SupportedGroups = 10,
     SignatureAlgorithms = 13,
@@ -207,11 +225,13 @@ pub enum ExtensionType {
     OIDFilters = 48,
 }
 
+#[derive(Debug)]
 pub struct KeyShareEntry {
     pub group : NamedGroup,
     pub key_exchange : Vec<u8> // <1..2^16-1>
 }
 
+#[derive(Debug)]
 pub struct KeyShare {
 /*
    pub struct {
@@ -229,27 +249,33 @@ pub struct KeyShare {
 */
 }
 
+#[derive(Debug)]
 pub enum PskKeyExchangeMode {
     PskKe = 0,
     PskDheKe = 1,
 }
 
+#[derive(Debug)]
 pub struct PskKeyExchangeModes {
     pub ke_modes : Vec<PskKeyExchangeMode> // <1..255>
 }
 
+#[derive(Debug)]
 pub struct Empty {}
 
+#[derive(Debug)]
 pub enum EarlyDataIndicationOptions {
     NewSessionTicket(u32), // max_early_data_size,
     ClientHello(Empty),
     EncryptedExtensions(Empty)
 }
 
+#[derive(Debug)]
 pub struct EarlyDataIndication {
     pub value : EarlyDataIndicationOptions
 }
 
+#[derive(Debug)]
 pub struct PskIdentity {
     pub identity : Vec<u8>, // <1..2^16-1>
     pub obfuscated_ticket_age : u32
@@ -257,26 +283,31 @@ pub struct PskIdentity {
 
 type PskBinderEntry = Vec<u8>; // <32..255>
 
+#[derive(Debug)]
 pub enum PreSharedKeyExtensionOptions {
     ClientHello(Vec<PskIdentity>, Vec<PskBinderEntry>), // identities<7..2^16-1> and binders<33..2^16-1>
     ServerHello(u16)
 }
 
+#[derive(Debug)]
 pub struct PreSharedKeyExtension {
     pub msg : PreSharedKeyExtensionOptions,
 }
 
 
+#[derive(Debug)]
 pub struct SupportedVersions {
     pub versions : Vec<ProtocolVersion>, // <2..254>
 }
 
+#[derive(Debug)]
 pub struct Cookie {
     pub cookie : Vec<u8> // <1..2^16-1>
 }
 
 // Should be 2 bytes, u16
 #[allow(non_camel_case_types)]
+#[derive(Debug)]
 pub enum SignatureScheme {
     /* RSASSA-PKCS1-v1_5 algorithms */
     rsa_pkcs1_sha1 = 0x0201,
@@ -300,11 +331,13 @@ pub enum SignatureScheme {
 }
 
 
+#[derive(Debug)]
 pub struct SignatureSchemeList {
     pub supported_signature_algorithms : Vec<SignatureScheme>, // <2..2^16-2>
 }
 
 #[allow(non_camel_case_types)]
+#[derive(Debug)]
 pub enum NamedGroup {
     /* Elliptic Curve Groups (ECDHE) */
     secp256r1 = 0x0017,
@@ -322,55 +355,66 @@ pub enum NamedGroup {
 
 }
 
+#[derive(Debug)]
 pub struct NamedGroupList {
     pub named_group_list : Vec<NamedGroup> // <2..2^16-1>
 }
 
 type DistinguishedName = Vec<u8>; // <1..2^16-1>
 
+#[derive(Debug)]
 pub struct CertificateAuthoritiesExtension {
     pub authorities : Vec<DistinguishedName> //<3..2^16-1>;
 }
 
+#[derive(Debug)]
 pub struct EncryptedExtensions {
     pub extensions : Vec<Extension> //<0..2^16-1>;
 }
 
+#[derive(Debug)]
 pub struct CertificateRequest {
     pub certificate_request_context : Vec<u8>, // <0..2^8-1>;
     pub extensions : Vec<Extension> //<2..2^16-1>;
 }
 
+#[derive(Debug)]
 pub struct OIDFilter {
     pub certificate_extension_oid : Vec<u8>, //<1..2^8-1>;
     pub certificate_extension_values : Vec<u8>, //<0..2^16-1>;
 }
 
+#[derive(Debug)]
 pub struct OIDFilterExtension {
     pub filters : Vec<u8>, //<0..2^16-1>;
 }
 
 type ASN1Cert = Vec<u8>; //<1..2^24-1>;
 
+#[derive(Debug)]
 pub struct CertificateEntry {
     pub cert_data : ASN1Cert,
     pub extensions : Vec<Extension> //<0..2^16-1>;
 }
 
+#[derive(Debug)]
 pub struct Certificate {
     pub certificate_request_context : Vec<u8>, //<0..2^8-1>;
     pub certificate_list : Vec<CertificateEntry> //<0..2^24-1>;
 }
 
+#[derive(Debug)]
 pub struct CertificateVerify {
     pub algorithm : SignatureScheme,
     pub signature : Vec<u8> //<0..2^16-1>;
 }
 
+#[derive(Debug)]
 pub struct Finished {
     pub verify_data : Vec<u8> //[Hash.length];
 }
 
+#[derive(Debug)]
 pub struct NewSessionTicket {
     pub ticket_lifetime : u32,
     pub ticket_age_add : u32,
@@ -378,13 +422,16 @@ pub struct NewSessionTicket {
     pub extensions : Vec<Extension>, //<0..2^16-2>;
 }
 
+#[derive(Debug)]
 pub struct EndOfEarlyData {}
 
+#[derive(Debug)]
 pub enum KeyUpdateRequest {
     update_not_requested = 0,
     update_requested = 1,
 }
 
+#[derive(Debug)]
 pub struct KeyUpdate {
     pub request_update : KeyUpdateRequest,
 }

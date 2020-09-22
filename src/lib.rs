@@ -7,6 +7,14 @@ use std::io::Write;
 use serialization::TLSToBytes;
 use structures::{Random, ClientHello, CipherSuite, Extension, ContentType, HandshakeMessage, ServerHello, TLSPlaintext, TLSState, TLSError};
 
+
+    pub fn to_hex_string(bytes: Vec<u8>) -> String {
+  let strs: Vec<String> = bytes.iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+  strs.connect(" ")
+}
+
 // Misc. functions
 pub fn bytes_to_u16(bytes : &[u8]) -> u16 {
 	((bytes[0] as u16) << 8) | (bytes[1] as u16)
@@ -74,7 +82,7 @@ impl<'a> TLS_config<'a> {
         }
 
         let first = self.recordcache.remove(0);
-        let second = self.recordcache.remove(1);
+        let second = self.recordcache.remove(0);
         Ok(((first as u16) << 8) | (second as u16))
     }
 
@@ -85,6 +93,7 @@ impl<'a> TLS_config<'a> {
     fn fill_recordcache(&mut self) -> Result<(), TLSError> {
         // Grab another fragment
         let tlsplaintext : TLSPlaintext = try!(self.get_next_tlsplaintext());
+        println!("Plaintext: {:?}", tlsplaintext);
         self.ctypecache = tlsplaintext.ctype;
         self.recordcache.extend(tlsplaintext.fragment);
         Ok(())
@@ -99,10 +108,12 @@ impl<'a> TLS_config<'a> {
     	self.writer.write_all(data.as_slice()).or(Err(TLSError::ReadError))
     }
 
+
 	fn get_next_tlsplaintext(&mut self) -> Result<TLSPlaintext, TLSError> {
-		// Try to read TLSPlaintext header
 		let mut buffer : [u8; 5] = [0; 5];
 		try!(self.reader.read_exact(&mut buffer).or(Err(TLSError::ReadError)));
+
+        println!("buff:{:?}", buffer);
 
 		// Match content type (is there a better way to do this in Rust stable?)
 		let contenttype : ContentType = match buffer[0] {
@@ -111,31 +122,38 @@ impl<'a> TLS_config<'a> {
 			21 => ContentType::Alert,
 			22 => ContentType::Handshake,
 			23 => ContentType::ApplicationData,
-			_  => return Err(TLSError::InvalidHandshakeError)
+			x  => {assert!(false); println!("CONT_TYPE: {:?}", x); return Err(TLSError::InvalidHandshakeError)}
 		};
+
+        println!("AAA");
 
 		// Match legacy protocol version
 		let legacy_version = bytes_to_u16(&buffer[1..3]);
 		if legacy_version != 0x0301 {
+            println!("LEGACY");
 			return Err(TLSError::InvalidHandshakeError)
 		}
 
 		// Make sure length is less than 2^14-1
 		let length = bytes_to_u16(&buffer[3..5]);
+        println!("length: {:?} ({:?})", length, &buffer[3..5]);
 		if length >= 16384 {
+            println!("LENG");
 			return Err(TLSError::InvalidHandshakeError)
 		}
 
 		// Read the remaining data from the buffer
-		let mut data = Vec::with_capacity(length as usize);
-		try!(self.reader.read_exact(data.as_mut_slice()).or(Err(TLSError::ReadError)));
+		let mut data = vec![0; length as usize];
+		try!(self.reader.read_exact(&mut data).or(Err(TLSError::ReadError)));
 
         /*
             FIXME: Check if we have received a TLS Alert message here. That should always
             warrant returning an error to the caller
         */
 
-		Ok(TLSPlaintext{ctype: contenttype, legacy_record_version: legacy_version, length: length, fragment: data})
+        println!("Data: {:?}", to_hex_string(data.to_vec()));
+
+		Ok(TLSPlaintext{ctype: contenttype, legacy_record_version: legacy_version, length: length, fragment: data.to_vec()})
 	}
 
 	fn process_ciphersuites(&mut self, data : &[u8]) -> Result<Vec<CipherSuite>, TLSError> {
@@ -155,7 +173,8 @@ impl<'a> TLS_config<'a> {
                 0x1303 => CipherSuite::TLS_CHACHA20_POLY1305_SHA256,
                 0x1304 => CipherSuite::TLS_AES_128_CCM_SHA256,
                 0x1305 => CipherSuite::TLS_AES_128_CCM_8_SHA256,
-                _ => return Err(TLSError::InvalidHandshakeError)
+                _ => CipherSuite::UNKNOWN,
+                // _ => {println!("CIPHER"); return Err(TLSError::InvalidHandshakeError)}
             });
         }
 	    Ok(ret)
@@ -164,10 +183,12 @@ impl<'a> TLS_config<'a> {
 	fn process_extensions(&mut self, data : &[u8]) -> Result<Vec<Extension>, TLSError> {
 
         let mut ret : Vec<Extension> = Vec::new();
+        println!("crypto extensions data: {:?}", to_hex_string(data.to_vec()));
         let mut iter = data.iter();
 
         while let Some(first) = iter.next() {
             let second = iter.next().unwrap();
+            println!("FS: {:x?}, {:x?}", first, second);
             ret.push(match ((*first as u16) << 8) | (*second as u16) {
     			10 => try!(Extension::parse_supported_groups(&mut iter)),
     			13 => try!(Extension::parse_signature_algorithms(&mut iter)),
@@ -179,7 +200,7 @@ impl<'a> TLS_config<'a> {
     			45 => try!(Extension::parse_psk_key_exchange_modes(&mut iter)),
     			47 => try!(Extension::parse_certificate_authorities(&mut iter)),
     			48 => try!(Extension::parse_oldfilters(&mut iter)),
-                _ => return Err(TLSError::InvalidHandshakeError)
+                x => {println!("PARSE: {:?}", x); return Err(TLSError::InvalidHandshakeError)}
             });
         }
 
@@ -188,7 +209,9 @@ impl<'a> TLS_config<'a> {
 
 	fn read_clienthello(&mut self) -> Result<ClientHello, TLSError> {
         // Fill our cache before we start reading
+        println!("READING CLIENT HELLO");
         self.drain_recordcache();
+        println!("FILLING RECORD CACHE");
         try!(self.fill_recordcache());
 
         // Make sure we are dealing with a Handshake TLSPlaintext
@@ -196,9 +219,16 @@ impl<'a> TLS_config<'a> {
             return Err(TLSError::InvalidMessage)
         }
 
+        self.recordcache.remove(0);
+        self.recordcache.remove(0);
+        self.recordcache.remove(0);
+        self.recordcache.remove(0);
+
         // Grab our legacy version
         let legacy_version: u16 = try!(self.read_u16());
+        println!("{:?}", legacy_version);
         if legacy_version != 0x0303 {
+            println!("VERSI");
             return Err(TLSError::InvalidHandshakeError)
         }
 
@@ -206,20 +236,29 @@ impl<'a> TLS_config<'a> {
         let mut random : Random = [0; 32];
         try!(self.read(&mut random));
 
+        println!("Dataaa: {:?}", to_hex_string(self.recordcache.to_vec()));
+
         // Legacy session ID can be 0-32 bytes
         let lsi_length : usize = try!(self.read_u8()) as usize;
         if lsi_length > 32{
+            println!("LEN__");
             return Err(TLSError::InvalidHandshakeError)
         }
+        println!("lsi_len: {:?}", lsi_length);
 
         let mut legacy_session_id = vec![0; lsi_length];
         try!(self.read(legacy_session_id.as_mut_slice()));
 
+        println!("DataaaCS: {:?}", to_hex_string(self.recordcache.to_vec()));
+
+
         // Read in the list of valid cipher suites
-        // In reality, for TLS 1.3, there are only 5 valid cipher suites, so this list
+        // In reality, for TLS 1.3, there are only 5 valid cipher suites (UHH apparently not??), so this list
         // should never have more than 5 elements (10 bytes) in it.
         let cslist_length : usize = try!(self.read_u16()) as usize;
-        if cslist_length < 2 || cslist_length > (2^16 - 2) || cslist_length % 2 != 0 {
+        if cslist_length < 2 || cslist_length > ((2 << 16) - 2) || cslist_length % 2 != 0 {
+            println!("CSLEN__: {:?}", cslist_length);
+            println!("{:?}", cslist_length > (2^16 - 2));
             return Err(TLSError::InvalidHandshakeError)
         }
 
@@ -230,17 +269,23 @@ impl<'a> TLS_config<'a> {
         // Read in legacy compression methods (should just be null compression)
         let comp_length = try!(self.read_u8()) as usize;
         if comp_length != 1 {
+            println!("COMP_LEN");
             return Err(TLSError::InvalidHandshakeError)
         }
 
         // 0x00 is null compression
         if try!(self.read_u8()) != 0x00 {
+            println!("READU*");
             return Err(TLSError::InvalidHandshakeError)
         }
 
         // Parse ClientHello extensions
         let ext_length = try!(self.read_u16()) as usize;
-        if ext_length < 8 || ext_length > 2^16-1 {
+        println!("Ext len: {:?}", ext_length);
+        println!("ext data and more: {:?}", to_hex_string(self.recordcache.to_vec()));
+
+        if ext_length < 8 || ext_length > (2 << 16)-1 {
+            println!("EXT_LEN");
             return Err(TLSError::InvalidHandshakeError)
         }
 

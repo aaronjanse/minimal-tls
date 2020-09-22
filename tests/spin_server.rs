@@ -28,12 +28,12 @@ fn handle_client(stream: TcpStream){
 
 
 #[test]
-#[ignore]
+// #[ignore]
 fn spin_server() {
     println!("RUNNING TEST: spin_server()");
 
     // point TLS 1.3 browser to https://localhost 
-    let addr = "127.0.0.1:443"; 
+    let addr = "127.0.0.1:8083"; 
     let listener = TcpListener::bind(addr).unwrap();
     println!("Listening on addr: {}", addr);
 

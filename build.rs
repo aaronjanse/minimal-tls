@@ -7,7 +7,6 @@ fn main() {
     println!("cargo:rustc-link-lib=sodium");
 
     let bindings = bindgen::Builder::default()
-                    .no_unstable_rust()
                     .header("libsodium/src/libsodium/include/sodium.h")
                     .generate()
                     .expect("Unable to generate libsodium bindings!");
